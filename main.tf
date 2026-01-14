@@ -25,6 +25,9 @@ data "aws_ami" "ecs_optimized" {
     name   = "name"
     values = ["amzn2-ami-ecs-hvm-*-x86_64-ebs"]
   }
-}
 
-# Core resources are split into separate files for clarity
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}

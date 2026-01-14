@@ -25,12 +25,6 @@ variable "public_subnet_ids" {
   type        = list(string)
 }
 
-variable "ecs_cluster_name" {
-  description = "ECS cluster name"
-  type        = string
-  default     = "production-ecs-cluster"
-}
-
 variable "service_name" {
   description = "ECS service name"
   type        = string
@@ -82,7 +76,7 @@ variable "on_demand_percentage_above_base" {
 variable "ssm_parameter_names" {
   description = "List of SSM Parameter Store parameter names for secrets (ARNs or names)"
   type        = list(string)
-  default     = ["/prod/app/db-password", "/prod/app/api-key"]
+  default     = []
 }
 
 variable "existing_security_group_ids" {
@@ -97,26 +91,12 @@ variable "health_check_path" {
   default     = "/health"
 }
 
-variable "ssm_secret_params" {
-  description = "List of SSM Parameter Store ARNs for secrets"
-  type        = list(string)
-  default     = []
-}
-
-variable "desired_count" {
-  description = "Desired number of tasks"
-  type        = number
-  default     = 2
-}
-
-variable "min_capacity" {
-  description = "Minimum number of tasks"
-  type        = number
-  default     = 2
-}
-
-variable "max_capacity" {
-  description = "Maximum number of tasks"
-  type        = number
-  default     = 10
+variable "tags" {
+  description = "Common tags for all resources"
+  type        = map(string)
+  default = {
+    Project     = "ECS-Assessment"
+    Environment = "Production"
+    ManagedBy   = "Terraform"
+  }
 }

@@ -27,9 +27,9 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = {
+  tags = merge(var.tags, {
     Name = "${var.service_name}-alb-sg"
-  }
+  })
 }
 
 # ECS Tasks Security Group
@@ -53,9 +53,9 @@ resource "aws_security_group" "ecs_tasks" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = {
+  tags = merge(var.tags, {
     Name = "${var.service_name}-tasks-sg"
-  }
+  })
 }
 
 # ECS Instances Security Group
@@ -65,7 +65,7 @@ resource "aws_security_group" "ecs_instances" {
   vpc_id      = var.vpc_id
 
   ingress {
-    description     = "From ECS tasks"
+    description     = "Inter-container communication"
     from_port       = 0
     to_port         = 65535
     protocol        = "tcp"
@@ -73,7 +73,15 @@ resource "aws_security_group" "ecs_instances" {
   }
 
   ingress {
-    description = "SSH from VPC (for debugging)"
+    description     = "From ECS tasks"
+    from_port       = 0
+    to_port         = 65535
+    protocol        = "tcp"
+    security_groups = [aws_security_group.ecs_tasks.id]
+  }
+
+  ingress {
+    description = "SSH from VPC"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
@@ -87,7 +95,7 @@ resource "aws_security_group" "ecs_instances" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = {
+  tags = merge(var.tags, {
     Name = "${var.service_name}-instances-sg"
-  }
+  })
 }

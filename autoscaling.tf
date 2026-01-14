@@ -1,4 +1,4 @@
-# Launch template for ECS instances
+# Launch template for ECS instances - NO PUBLIC IPs
 resource "aws_launch_template" "ecs_instance" {
   name_prefix   = "${var.service_name}-ecs-instance-"
   image_id      = data.aws_ami.ecs_optimized.id
@@ -9,8 +9,9 @@ resource "aws_launch_template" "ecs_instance" {
     arn = aws_iam_instance_profile.ecs_instance_profile.arn
   }
 
+  # CRITICAL: No public IPs
   network_interfaces {
-    associate_public_ip_address = false # CRITICAL: No public IPs
+    associate_public_ip_address = false
     security_groups             = concat([aws_security_group.ecs_instances.id], var.existing_security_group_ids)
   }
 
@@ -26,19 +27,20 @@ resource "aws_launch_template" "ecs_instance" {
 
   user_data = base64encode(<<-EOF
     #!/bin/bash
-    echo ECS_CLUSTER=${aws_ecs_cluster.main.name} >> /etc/ecs/ecs.config
+    echo ECS_CLUSTER=${aws_ecs_cluster.this.name} >> /etc/ecs/ecs.config
     echo ECS_ENABLE_CONTAINER_METADATA=true >> /etc/ecs/ecs.config
     echo ECS_ENABLE_SPOT_INSTANCE_DRAINING=true >> /etc/ecs/ecs.config
     echo ECS_ENABLE_TASK_IAM_ROLE=true >> /etc/ecs/ecs.config
+    echo ECS_ENABLE_TASK_IAM_ROLE_NETWORK_HOST=true >> /etc/ecs/ecs.config
   EOF
   )
 
   tag_specifications {
     resource_type = "instance"
 
-    tags = {
+    tags = merge(var.tags, {
       Name = "${var.service_name}-ecs-instance"
-    }
+    })
   }
 
   lifecycle {
@@ -46,7 +48,7 @@ resource "aws_launch_template" "ecs_instance" {
   }
 }
 
-# Mixed instances policy
+# Auto Scaling Group with Mixed Instances (On-Demand baseline + Spot overflow)
 resource "aws_autoscaling_group" "ecs" {
   name_prefix         = "${var.service_name}-asg-"
   vpc_zone_identifier = var.private_subnet_ids
@@ -54,11 +56,13 @@ resource "aws_autoscaling_group" "ecs" {
   max_size            = var.max_capacity * 2 # Allow for task scaling overhead
   desired_capacity    = var.on_demand_base_capacity
 
+  # Mixed Instances Policy: On-Demand baseline + Spot overflow
   mixed_instances_policy {
     instances_distribution {
       on_demand_base_capacity                  = var.on_demand_base_capacity
       on_demand_percentage_above_base_capacity = var.on_demand_percentage_above_base
       spot_allocation_strategy                 = "capacity-optimized"
+      spot_instance_pools                      = 4
     }
 
     launch_template {
@@ -78,78 +82,9 @@ resource "aws_autoscaling_group" "ecs" {
       override {
         instance_type = "m5.large"
       }
-    }
-  }
-
-  protect_from_scale_in = false
-
-  tag {
-    key                 = "AmazonECSManaged"
-    value               = true
-    propagate_at_launch = true
-  }
-
-  tag {
-    key                 = "Name"
-    value               = "${var.service_name}-ecs-instance"
-    propagate_at_launch = true
-  }
-
-  lifecycle {
-    create_before_destroy = true
-    ignore_changes = [
-      desired_capacity # Managed by ECS capacity provider
-    ]
-  }
-}
-
-# ECS Capacity Provider
-resource "aws_ecs_capacity_provider" "main" {
-  name = "${var.service_name}-capacity-provider"
-
-  auto_scaling_group_provider {
-    auto_scaling_group_arn         = aws_autoscaling_group.ecs.arn
-    managed_termination_protection = "ENABLED"
-
-    managed_scaling {
-      maximum_scaling_step_size = 2
-      minimum_scaling_step_size = 1
-      status                    = "ENABLED"
-      target_capacity           = 100
-    }
-  }
-}
-resource "aws_autoscaling_group" "ecs" {
-  name_prefix         = "${var.service_name}-asg-"
-  vpc_zone_identifier = var.private_subnet_ids
-  min_size            = 1
-  max_size            = 10
-  desired_capacity    = 2
-
-  # Mixed instances policy: On-Demand baseline + Spot overflow
-  mixed_instances_policy {
-    instances_distribution {
-      on_demand_base_capacity                  = 1
-      on_demand_percentage_above_base_capacity = 20  # 80% Spot, 20% On-Demand
-      spot_allocation_strategy                 = "capacity-optimized"
-    }
-
-    launch_template {
-      launch_template_specification {
-        launch_template_id = aws_launch_template.ecs_instance.id
-        version            = "$Latest"
-      }
 
       override {
-        instance_type = "t3.medium"
-      }
-
-      override {
-        instance_type = "t3a.medium"
-      }
-
-      override {
-        instance_type = "m5.large"
+        instance_type = "m5a.large"
       }
     }
   }
@@ -172,7 +107,7 @@ resource "aws_autoscaling_group" "ecs" {
   lifecycle {
     create_before_destroy = true
     ignore_changes = [
-      desired_capacity  # Managed by ECS capacity provider
+      desired_capacity # Managed by ECS capacity provider
     ]
   }
 }

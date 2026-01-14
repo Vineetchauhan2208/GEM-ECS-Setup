@@ -14,15 +14,35 @@ resource "aws_iam_role" "ecs_task_execution_role" {
       }
     ]
   })
+
+  tags = merge(var.tags, {
+    Name = "${var.service_name}-task-execution-role"
+  })
 }
 
-# Task execution role policy for ECS
-resource "aws_iam_role_policy_attachment" "ecs_task_execution_role_policy" {
-  role       = aws_iam_role.ecs_task_execution_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+# ECS Task Role
+resource "aws_iam_role" "ecs_task_role" {
+  name = "${var.service_name}-task-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ecs-tasks.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = merge(var.tags, {
+    Name = "${var.service_name}-task-role"
+  })
 }
 
-# Custom policy for SSM Parameter Store access
+# SSM Parameter Read Policy - LEAST PRIVILEGE
 resource "aws_iam_policy" "ssm_parameters_read" {
   name        = "${var.service_name}-ssm-parameters-read"
   description = "Allow reading specific SSM parameters"
@@ -43,10 +63,25 @@ resource "aws_iam_policy" "ssm_parameters_read" {
       }
     ]
   })
+
+  tags = merge(var.tags, {
+    Name = "${var.service_name}-ssm-parameters-read"
+  })
+}
+
+# Attach policies to task execution role
+resource "aws_iam_role_policy_attachment" "task_execution_ecr" {
+  role       = aws_iam_role.ecs_task_execution_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
 resource "aws_iam_role_policy_attachment" "task_execution_ssm" {
   role       = aws_iam_role.ecs_task_execution_role.name
+  policy_arn = aws_iam_policy.ssm_parameters_read.arn
+}
+
+resource "aws_iam_role_policy_attachment" "task_ssm" {
+  role       = aws_iam_role.ecs_task_role.name
   policy_arn = aws_iam_policy.ssm_parameters_read.arn
 }
 
@@ -66,6 +101,10 @@ resource "aws_iam_role" "ecs_instance_role" {
       }
     ]
   })
+
+  tags = merge(var.tags, {
+    Name = "${var.service_name}-instance-role"
+  })
 }
 
 resource "aws_iam_role_policy_attachment" "ecs_instance_role_policy" {
@@ -76,36 +115,4 @@ resource "aws_iam_role_policy_attachment" "ecs_instance_role_policy" {
 resource "aws_iam_instance_profile" "ecs_instance_profile" {
   name = "${var.service_name}-instance-profile"
   role = aws_iam_role.ecs_instance_role.name
-}
-
-resource "aws_iam_policy" "ssm_parameters_read" {
-  name        = "${var.service_name}-ssm-parameters-read"
-  description = "Allow reading specific SSM parameters"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "ssm:GetParameters",
-          "ssm:GetParameter"
-        ]
-        Resource = [
-          for param in var.ssm_secret_params : 
-          param  
-        ]
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "task_execution_ssm" {
-  role       = aws_iam_role.ecs_task_execution_role.name
-  policy_arn = aws_iam_policy.ssm_parameters_read.arn
-}
-
-resource "aws_iam_role_policy_attachment" "task_ssm" {
-  role       = aws_iam_role.ecs_task_role.name
-  policy_arn = aws_iam_policy.ssm_parameters_read.arn
 }
