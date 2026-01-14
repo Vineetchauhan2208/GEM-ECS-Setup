@@ -77,3 +77,35 @@ resource "aws_iam_instance_profile" "ecs_instance_profile" {
   name = "${var.service_name}-instance-profile"
   role = aws_iam_role.ecs_instance_role.name
 }
+
+resource "aws_iam_policy" "ssm_parameters_read" {
+  name        = "${var.service_name}-ssm-parameters-read"
+  description = "Allow reading specific SSM parameters"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameters",
+          "ssm:GetParameter"
+        ]
+        Resource = [
+          for param in var.ssm_secret_params : 
+          param  
+        ]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "task_execution_ssm" {
+  role       = aws_iam_role.ecs_task_execution_role.name
+  policy_arn = aws_iam_policy.ssm_parameters_read.arn
+}
+
+resource "aws_iam_role_policy_attachment" "task_ssm" {
+  role       = aws_iam_role.ecs_task_role.name
+  policy_arn = aws_iam_policy.ssm_parameters_read.arn
+}

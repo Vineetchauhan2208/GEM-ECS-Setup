@@ -96,3 +96,27 @@ variable "health_check_path" {
   type        = string
   default     = "/health"
 }
+
+variable "ssm_secret_params" {
+  description = "List of SSM Parameter Store ARNs for secrets"
+  type        = list(string)
+  default     = []
+}
+
+variable "desired_count" {
+  description = "Desired number of tasks"
+  type        = number
+  default     = 2
+}
+
+variable "min_capacity" {
+  description = "Minimum number of tasks"
+  type        = number
+  default     = 2
+}
+
+variable "max_capacity" {
+  description = "Maximum number of tasks"
+  type        = number
+  default     = 10
+}

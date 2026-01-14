@@ -119,3 +119,60 @@ resource "aws_ecs_capacity_provider" "main" {
     }
   }
 }
+resource "aws_autoscaling_group" "ecs" {
+  name_prefix         = "${var.service_name}-asg-"
+  vpc_zone_identifier = var.private_subnet_ids
+  min_size            = 1
+  max_size            = 10
+  desired_capacity    = 2
+
+  # Mixed instances policy: On-Demand baseline + Spot overflow
+  mixed_instances_policy {
+    instances_distribution {
+      on_demand_base_capacity                  = 1
+      on_demand_percentage_above_base_capacity = 20  # 80% Spot, 20% On-Demand
+      spot_allocation_strategy                 = "capacity-optimized"
+    }
+
+    launch_template {
+      launch_template_specification {
+        launch_template_id = aws_launch_template.ecs_instance.id
+        version            = "$Latest"
+      }
+
+      override {
+        instance_type = "t3.medium"
+      }
+
+      override {
+        instance_type = "t3a.medium"
+      }
+
+      override {
+        instance_type = "m5.large"
+      }
+    }
+  }
+
+  # Required for ECS capacity provider
+  protect_from_scale_in = false
+
+  tag {
+    key                 = "AmazonECSManaged"
+    value               = true
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "Name"
+    value               = "${var.service_name}-ecs-instance"
+    propagate_at_launch = true
+  }
+
+  lifecycle {
+    create_before_destroy = true
+    ignore_changes = [
+      desired_capacity  # Managed by ECS capacity provider
+    ]
+  }
+}
