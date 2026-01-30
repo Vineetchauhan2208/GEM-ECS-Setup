@@ -198,13 +198,13 @@ resource "aws_ecs_service" "this" {
 
   lifecycle {
     ignore_changes = [
-      desired_count,
-      task_definition
+      desired_count
     ]
   }
 
   depends_on = [
     aws_lb_listener.http,
+    aws_lb_target_group.main,
     aws_ecs_cluster_capacity_providers.this,
     aws_autoscaling_group.ecs
   ]
